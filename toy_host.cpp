@@ -31,6 +31,7 @@ void matricMulv2(const float *a, const float *b, float *c, const int m , const i
 void matricMulv3(const float *a, const float *b, float *c, const int m , const int n, const int l);
 void showMatrix(const char *name, const float *a, const int m , const int n);
 void verify(const float *C_cpu, const float *C_gpu, int M, int N);
+void randomInit(float *a, int n);
 
 ////////////////////////////////////////////////////////////////////////////////
 // These are CUDA Helper functions
@@ -53,11 +54,11 @@ int main(int argc, char **argv)
 {
     printf("Toy cuda run(Driver API) ...\n");
     int devID = 0;
-    int M = 4;//atoi(argv[1]);
-    int N = 8;//atoi(argv[2]);
+    int M = 16;//atoi(argv[1]);
+    int N = 32;//atoi(argv[2]);
     int K = 100;//atoi(argv[3]);
     char *cubin_file = "toy_kernel.cubin";//argv[4];
-    char *func_name = "matrixMulv1"; // "row_col_kernel"  
+    char *func_name = "matrixMulv21"; // "row_col_kernel"  
  
     CUresult error;
     
@@ -176,10 +177,8 @@ int main(int argc, char **argv)
        h_C_cpu[i] = 0;
     }
 
-    for(int i=0;i<M*K;i++)
-       h_A[i] = i;
-    for(int i=0;i<N*K;i++)
-       h_B[i] = i;
+    randomInit(h_A, M*K);
+    randomInit(h_B, N*K);
     /* //print init values
     showMatrix("A", h_A, M, K);
     showMatrix("B", h_B, K, N);
@@ -228,7 +227,7 @@ int main(int argc, char **argv)
     
     //Launch the CUDA kernel
     checkCudaErrors(cuLaunchKernel(toy_kernel, 1, 1, 1,
-                           32, 1, 1, 
+                           16, 32, 1, 
                            0,
                            NULL, args, NULL));
     printf("--launch kernel success!\n");
@@ -240,7 +239,7 @@ int main(int argc, char **argv)
     {
         exitFail();
     }
-    printf("copy C back success!\n");
+    printf("--copy C back success!\n");
     //showMatrix("C", h_C, M, N);
     verify(h_C_cpu, h_C, M,N);
     return 0;
@@ -357,4 +356,12 @@ void verify(const float *C_cpu, const float *C_gpu, int M, int N)
         }
     }
     printf("Verify Success!\n");
+}
+
+void randomInit(float *a, int n)
+{
+    for (int i = 0; i < n; ++i)
+    {
+        a[i] = rand() / (float)RAND_MAX;
+    }
 }
