@@ -106,21 +106,29 @@ extern "C" __global__ void matrixMulv12(const float *A, const float *B, float *C
     // tidx is greater than M*N
     int row = idx/N;    // 前N个线程算第一行
     int column = idx%N; // 其中每个线程算第一行中的某一列
-
     int indexA = row*K+0;   // A 第row行的偏移量
     int stripA = 1;
     int indexB = column;    // B  第column列的偏移量
     int stripB = N;
     int indexC = row*N+column;
-
-    float temp = 0.f;
-    for(int i = 0; i < K; ++i)
+    
+    while(row < M && column <N)
     {
-        temp+=A[indexA+stripA*i]*B[indexB+stripB*i];
-    }
+        float temp = 0.f;
+        for(int i = 0; i < K; ++i)
+        {
+            temp+=A[indexA+stripA*i]*B[indexB+stripB*i];
+        }
     
-    C[indexC] = temp;
-    
+        C[indexC] = temp;
+
+       idx+=blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+       row = idx/N; 
+       column = idx%N;
+       indexA = row*K+0;
+       indexB = column;
+       indexC = row*N+column;
+   }
 }
 
 // <<<(bX,bY,1),(tX,tY,1)>>>
@@ -134,22 +142,40 @@ extern "C" __global__ void matrixMulv2(const float *A, const float *B, float *C,
 
     // assume tidx*bidx > M and tidy*bidy > N
 
-    int row = bidx*blockDim.x + tidx;
-    int column = bidy*blockDim.y + tidy;
-
-    int indexA = row*K+0;   // A 第row行的偏移量
-    int stripA = 1;
-    int indexB = column;    // B  第column列的偏移量
-    int stripB = N;
-    int indexC = row*N+column;
-
-    float temp = 0.f;
-    for(int i = 0; i < K; ++i)
+    int row_base = bidx*blockDim.x + tidx;
+    int column_base = bidy*blockDim.y + tidy;
+    int row = 0;
+    int column = 0;
+    // if matrix C small than threads, need this protect.
+    // assume tidx*bidx > M and tidy*bidy > N
+    for(int i = 0; i < (M/(blockDim.x*gridDim.x) + 1); ++i)
     {
-        temp+=A[indexA+stripA*i]*B[indexB+stripB*i];
+        row = row_base + i*blockDim.x*gridDim.x;
+        for (int j = 0; j < (N/(blockDim.y*gridDim.y) + 1); ++j)
+        {
+            column = column_base+j*blockDim.y*gridDim.y;
+            if (row < M && column<N)
+            {
+                int indexA = row*K+0;   // A 第row行的偏移量
+                int stripA = 1;
+                int indexB = column;    // B  第column列的偏移量
+                int stripB = N;
+                int indexC = row*N+column;
+
+                float temp = 0.f;
+                for(int k = 0; k < K; ++k)
+                {
+                    temp+=A[indexA+stripA*k]*B[indexB+stripB*k];
+                }
+                
+                C[indexC] = temp; 
+
+                // avoid Matrix is greater than threads
+                //row+=blockDim.x*gridDim.x;
+                //column+=blockDim.y*gridDim.y;
+            }
+        }
     }
-    
-    C[indexC] = temp; 
 }
 
 // <<<(1,1,1),(tX,tY,1)>>>
