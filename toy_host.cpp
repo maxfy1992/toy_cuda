@@ -25,7 +25,12 @@ CUdeviceptr d_B;
 CUdeviceptr d_C;
 
 // Functions
-void exit_fail();
+void exitFail();
+void matricMulv1(const float *a, const float *b, float *c, const int m , const int n, const int l);
+void matricMulv2(const float *a, const float *b, float *c, const int m , const int n, const int l);
+void matricMulv3(const float *a, const float *b, float *c, const int m , const int n, const int l);
+void showMatrix(const char *name, const float *a, const int m , const int n);
+void verify(const float *C_cpu, const float *C_gpu, int M, int N);
 
 ////////////////////////////////////////////////////////////////////////////////
 // These are CUDA Helper functions
@@ -48,11 +53,11 @@ int main(int argc, char **argv)
 {
     printf("Toy cuda run(Driver API) ...\n");
     int devID = 0;
-    int M = 2;//atoi(argv[1]);
-    int N = 3;//atoi(argv[2]);
-    int K = 4;//atoi(argv[3]);
+    int M = 4;//atoi(argv[1]);
+    int N = 8;//atoi(argv[2]);
+    int K = 100;//atoi(argv[3]);
     char *cubin_file = "toy_kernel.cubin";//argv[4];
-    char *func_name = "toy_kernel";  
+    char *func_name = "matrixMulv1"; // "row_col_kernel"  
  
     CUresult error;
     
@@ -65,12 +70,12 @@ int main(int argc, char **argv)
     error = cuDeviceGetCount(&deviceCount);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     if (deviceCount == 0)
     {
         printf("There is no device supporting CUDA.\n");
-        exit_fail();
+        exitFail();
     }
     printf("--DeviceGetCount success!,get %d device(s)\n",deviceCount);
     
@@ -84,7 +89,7 @@ int main(int argc, char **argv)
     error = cuDeviceGet(&cuDevice, devID);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--getDevice success\n");
 
@@ -92,7 +97,7 @@ int main(int argc, char **argv)
     error = cuCtxCreate(&cuContext, 0, cuDevice);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--create context success!\n");
 
@@ -100,14 +105,14 @@ int main(int argc, char **argv)
     error = cuModuleLoad(&cuModule, cubin_file);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--load cubin success!\n");
 
     error = cuModuleGetFunction(&toy_kernel, cuModule, func_name);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--get function success!\n");    
 
@@ -116,7 +121,7 @@ int main(int argc, char **argv)
     h_A = (float *)malloc(size_A);
     if (h_A == NULL)
     {
-        exit_fail();;
+        exitFail();;
     }
     printf("--alloc h_A success!\n");
 
@@ -124,7 +129,7 @@ int main(int argc, char **argv)
     h_B = (float *)malloc(size_B);
     if (h_B == NULL)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc h_B success!\n");
 
@@ -132,14 +137,14 @@ int main(int argc, char **argv)
     h_C = (float *)malloc(size_C);
     if (h_C == NULL)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc h_C success!\n");
 
     h_C_cpu = (float *)malloc(size_C);
     if (h_C_cpu == NULL)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc h_C_cpu success!\n");
 
@@ -147,20 +152,20 @@ int main(int argc, char **argv)
     error = cuMemAlloc(&d_A, size_A);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc d_A success!\n");
     error = cuMemAlloc(&d_B, size_B); 
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc d_B success!\n");
 
     error = cuMemAlloc(&d_C, size_C); 
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--alloc d_C success!\n");
     
@@ -174,35 +179,48 @@ int main(int argc, char **argv)
     for(int i=0;i<M*K;i++)
        h_A[i] = i;
     for(int i=0;i<N*K;i++)
-       h_B[i] = 1.0;
+       h_B[i] = i;
+    /* //print init values
+    showMatrix("A", h_A, M, K);
+    showMatrix("B", h_B, K, N);
+    showMatrix("C", h_C, M, N);
+    showMatrix("C_cpu", h_C_cpu, M, N);
+    */ 
+    /* // compute matric C
+    matricMulv1(h_A, h_B, h_C_cpu, M , N, K);
+    showMatrix("C_cpu", h_C_cpu, M, N);
+    for(int i=0;i<M*N;i++)
+    {
+       h_C_cpu[i] = 0;
+    }
+    matricMulv2(h_A, h_B, h_C_cpu, M , N, K);
+    showMatrix("C_cpu", h_C_cpu, M, N);
+    for(int i=0;i<M*N;i++)
+    {
+       h_C_cpu[i] = 0;
+    }
+    */
+    matricMulv3(h_A, h_B, h_C_cpu, M , N, K);
+   // showMatrix("C_cpu", h_C_cpu, M, N);
     
-    //
-    for (int i = 0; i < M; ++i)
-        {
-            for(int j = 0; j < K; ++j)
-            {
-                printf("A[%d][%d]=(%f). \n", i,j, h_A[i*K+j]);
-            }
-        } 
-
     error = cuMemcpyHtoD(d_A, h_A, size_A);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail(); 
+        exitFail(); 
     }
     printf("--memcpy h_A to devivce d_A  success!\n");
 
     error = cuMemcpyHtoD(d_B, h_B, size_B);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--memcpy h_B to devivce d_B  success!\n");
 
     error = cuMemcpyHtoD(d_C, h_C, size_C);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("--memcpy h_C to devivce d_C  success!\n");
 
@@ -220,18 +238,123 @@ int main(int argc, char **argv)
     error = cuMemcpyDtoH(h_C, d_C, size_C);
     if (error != CUDA_SUCCESS)
     {
-        exit_fail();
+        exitFail();
     }
     printf("copy C back success!\n");
-
+    //showMatrix("C", h_C, M, N);
+    verify(h_C_cpu, h_C, M,N);
     return 0;
 
 }
 
-void exit_fail()
+void exitFail()
 {
     exit(1);
 }
 
+// a m*l
+// b l*n
+// c m*n
+// b 访存不连续，无法向量化
+void matricMulv1(const float *a, const float *b, float *c, const int m , const int n, const int l)
+{
+    for (int i = 0; i < m; ++i)
+    {
+      for (int j = 0; j < n; ++j)
+      {
+          for (int k = 0; k < l; ++k)
+          {
+              // 2-dims
+              //c[i][j]+= a[i][k]*b[k][j];
+              // 1-dims
+              c[i*n+j] += a[i*l+k]*b[k*n+j];
+          }
+      }
+    }
+}
 
+// 交换内存循环，使得b访存连续，可以向量化
+// a m*l
+// b l*n
+// c m*n
+void matricMulv2(const float *a, const float *b, float *c, const int m , const int n, const int l)
+{
+    for (int i = 0; i < m; ++i)
+    {
+      for (int k = 0; k < l; ++k)
+      {
+          //temp = a[i][k];
+          float temp = a[i*l+k];
+          for (int j = 0; j < n; ++j)
+          {
+              // 2-dims
+              //c[i][j]+= temp*b[k][j];
+              // 1-dims
+              c[i*n+j] += temp*b[k*n+j];
+          }
+      }
+    }
+}
 
+// 转置b矩阵，使得b访存连续，可以向量化
+// a m*l
+// b l*n
+// c m*n
+void matricMulv3(const float *a, const float *b, float *c, const int m , const int n, const int l)
+{
+  float *b1=(float*)malloc(sizeof(float)*l*n);
+  memset(b1, 0, sizeof(float)*l*n);
+  for (int i = 0; i < l; ++i)
+  {
+      for (int j = 0; j < n; ++j)
+      {
+          //b1[i][j] = b[j][i];
+          b1[j*l+i] = b[i*n+j];
+      }
+  }
+//showMatrix("B'", b1, n, l);
+  for (int i = 0; i < m; ++i)
+  {
+      for (int j = 0; j < n; ++j)
+      {
+          for (int k = 0; k < l; ++k)
+          {
+              // 2-dims
+              //c[i][j]+= a[i][k]*b1[j][k];
+              // 1-dims
+              c[i*n+j] += a[i*l+k]*b1[j*l+k];
+          }
+      }
+  }
+
+  free(b1);
+}
+
+void showMatrix(const char *name, const float *a, const int m , const int n)
+{
+    printf("show %s \n", name);
+    for (int i = 0; i < m; ++i)
+    {
+        for(int j = 0; j < n; ++j)
+        {
+            printf("matrix[%d][%d]=(%f). \n", i,j, a[i*n+j]);
+        }
+    } 
+}
+
+void verify(const float *C_cpu, const float *C_gpu, int M, int N)
+{
+    for(int m=0;m<M;m++)
+    {
+        for(int n=0;n<N;n++)
+        {
+            if(fabs(C_cpu[n+m*N] - C_gpu[n+m*N]) > 1e-5)
+            {
+		printf("Verify Failed!\n");
+		printf("cpu result: %f, gpu result: %f\n",C_cpu[n+m*N],C_gpu[n+m*N]);
+		exit(1);
+            }
+        }
+    }
+    printf("Verify Success!\n");
+}
