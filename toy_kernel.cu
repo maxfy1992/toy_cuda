@@ -44,6 +44,8 @@ extern "C" __global__ void row_col_kernel(const float *A, const float *B, float 
     }
 }
 
+// impls below: one thread cal one position in C. jump to cal big matrix
+
 // <<<(1,1,1),(32,1,1)>>>
 extern "C" __global__ void matrixMulv1(const float *A, const float *B, float *C, const int M, const int N, const int K)
 {
@@ -112,6 +114,7 @@ extern "C" __global__ void matrixMulv12(const float *A, const float *B, float *C
     int stripB = N;
     int indexC = row*N+column;
     
+    // condition to avoid small matrix    
     while(row < M && column <N)
     {
         float temp = 0.f;
@@ -121,7 +124,8 @@ extern "C" __global__ void matrixMulv12(const float *A, const float *B, float *C
         }
     
         C[indexC] = temp;
-
+        
+       //  jump to compute big matrix  
        idx+=blockDim.x*blockDim.y*gridDim.x*gridDim.y;
        row = idx/N; 
        column = idx%N;
@@ -202,4 +206,41 @@ extern "C" __global__ void matrixMulv21(const float *A, const float *B, float *C
     }
     
     C[indexC] = temp; 
+}
+
+// <<<(X,1,1),(tX,1,1)>>>
+// one block cal one row in C. one thread one element in C
+extern "C" __global__ void matrixMulv22(const float *A, const float *B, float *C, const int M, const int N, const int K)
+{
+    int tidx = threadIdx.x;
+    int bidx = blockIdx.x;
+
+    // assume tidx > M and tidy> N
+    int row_base = bidx;
+    int column_base = tidx;
+
+    for (int i = 0; i < (M/gridDim.x+1); ++i)
+    {
+        int row = row_base + i*gridDim.x;
+        for (int j = 0; j < (N/blockDim.x+1); ++j)
+        {
+            int column = column_base + j*blockDim.x;
+            if (row < M && column<N)
+            {
+                int indexA = row*K+0;   // A 第row行的偏移量
+                int stripA = 1;
+                int indexB = column;    // B  第column列的偏移量
+                int stripB = N;
+                int indexC = row*N+column;
+
+                float temp = 0.f;
+                for(int k = 0; k < K; ++k)
+                {
+                    temp+=A[indexA+stripA*k]*B[indexB+stripB*k];
+                }
+                
+                C[indexC] = temp; 
+            }
+        }
+    }
 }
