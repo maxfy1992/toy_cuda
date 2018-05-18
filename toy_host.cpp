@@ -54,11 +54,11 @@ int main(int argc, char **argv)
 {
     printf("Toy cuda run(Driver API) ...\n");
     int devID = 0;
-    int M = 8*2;//atoi(argv[1]);
-    int N = 16*2;//atoi(argv[2]);
+    int M = 8;//atoi(argv[1]);
+    int N = 16;//atoi(argv[2]);
     int K = 100;//atoi(argv[3]);
     char *cubin_file = "toy_kernel.cubin";//argv[4];
-    char *func_name = "matrixMulv22"; // "row_col_kernel"  
+    char *func_name = "matrixMulv3"; // "row_col_kernel"  
  
     CUresult error;
     
@@ -228,7 +228,7 @@ int main(int argc, char **argv)
     //Launch the CUDA kernel
     checkCudaErrors(cuLaunchKernel(toy_kernel, 8, 1, 1,
                            16, 1, 1, 
-                           0,
+                           (sizeof(float)*K),
                            NULL, args, NULL));
     printf("--launch kernel success!\n");
 
